@@ -1,0 +1,12 @@
+\begin{tabular}{llccc}
+\toprule
+Model & Probabilities & Brier & ECE & Mean $\hat p$ \\
+\midrule
+LR & raw & 0.2159 & 0.0640 & 0.295 \\
+LR & Platt (Oct-Nov) & 0.2218 & 0.1034 & 0.232 \\
+LR & Platt (rolling) & 0.2168 & 0.0450 & 0.298 \\
+XGBoost & raw & 0.2163 & 0.0734 & 0.269 \\
+XGBoost & Platt (Oct-Nov) & 0.2205 & 0.1017 & 0.234 \\
+XGBoost & Platt (rolling) & 0.2150 & 0.0474 & 0.298 \\
+\bottomrule
+\end{tabular}
