@@ -1,0 +1,27 @@
+# data (download separately, see README)
+data_raw/*.csv
+data/
+
+# generated
+models/
+__pycache__/
+.ipynb_checkpoints/
+
+# environment
+.venv/
+.env
+
+# LaTeX build files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.nav
+*.snm
+*.toc
+*.synctex.gz
+
+.DS_Store
