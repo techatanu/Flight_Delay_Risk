@@ -1,0 +1,10 @@
+\begin{tabular}{lccccc}
+\toprule
+Model & Val PR-AUC & Test PR-AUC & Test ROC-AUC & Test ECE & Mean $\hat p$ \\
+\midrule
+LR (unweighted) & 0.297 & 0.461 & 0.640 & 0.064 & 0.295 \\
+LR, balanced class weights & 0.296 & 0.460 & 0.641 & 0.182 & 0.517 \\
+XGBoost (unweighted) & 0.276 & 0.468 & 0.645 & 0.073 & 0.269 \\
+XGBoost, positive weight 3.00 & 0.273 & 0.466 & 0.647 & 0.153 & 0.488 \\
+\bottomrule
+\end{tabular}
