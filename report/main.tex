@@ -17,9 +17,9 @@
 \title{Day-Ahead Flight Delay Risk Prediction with\\Leakage-Free Features and Calibrated Classifiers}
 
 \author{
-\IEEEauthorblockN{Member 1, Member 2, Member 3, Member 4, Member 5}
-\IEEEauthorblockA{Department / University (to be filled)\\
-Advanced Machine Learning Course Project --- Phase 1}
+\IEEEauthorblockN{Atanu Adhikari, Sambhav Kumar, Nishant Ranjan Singh,\\
+Sankalp M Tellur, Prince Kumar Singh}
+\IEEEauthorblockA{Advanced Machine Learning Course Project --- Phase 1}
 }
 
 \maketitle
@@ -304,8 +304,11 @@ November, giving $w = \XGBRollWindow$ days for both models.
 \item \textbf{Baselines:} constant training base rate, and the smoothed historical route
 delay rate as a score.
 \end{itemize}
-The code is organised as five Jupyter notebooks and uses scikit-learn \cite{pedregosa2011}
-and XGBoost; running them in order reproduces every number and figure in this report.
+The code is organised as five Jupyter notebooks, one work package per team member
+(see Team Contributions), and uses scikit-learn \cite{pedregosa2011}
+and XGBoost; running them in order reproduces every number and figure in this report. The code,
+results and this report are available at
+\url{https://github.com/techatanu/Flight_Delay_Risk}.
 
 %=====================================================================
 \section{Results}
@@ -505,11 +508,43 @@ will compare these models with a compact MLP that learns embeddings for carrier,
 origin and destination on the same split and features.
 
 \section*{Team Contributions}
-\noindent\emph{To be filled by the team.} Suggested split by notebook: EDA
-(\texttt{01\_eda}); feature engineering and leakage test (\texttt{02\_feature\_engineering});
-model training, calibration and ablation (\texttt{03\_model\_training}); evaluation
-(\texttt{04\_evaluation\_calibration}); rescheduling, report and slides
-(\texttt{05\_rescheduling}, \texttt{report/}, \texttt{slides/}).
+The project was divided into five work packages, one per notebook, and the notebooks
+pass their outputs to one another in order.
+\begin{itemize}
+\item \textbf{Atanu Adhikari} (exploratory data analysis). Audited data quality (cancelled and diverted flights, missing tail
+numbers, duplicate ids), fixed the delay target and identified the post-departure
+columns that must be excluded, and analysed seasonality, time of day, day of week,
+carriers, routes and day-to-day persistence. This work underlies the Dataset and
+Exploratory Analysis section, including the base-rate differences between the
+training, validation and test months. Notebook: \texttt{01\_eda}.
+
+\item \textbf{Sambhav Kumar} (feature engineering). Built the 35 schedule, calendar, congestion and
+history features, including the past-only aggregation, the Beta-prior smoothing and the
+cyclic time encodings, and wrote the leakage test that rebuilds the features after
+corrupting all outcomes from a cutoff date, together with the check that a deliberately
+leaky version is detected. This work underlies the Problem Formulation and Feature
+Engineering sections. Notebook: \texttt{02\_feature\_engineering}.
+
+\item \textbf{Nishant Ranjan Singh} (model training). Tuned logistic regression and XGBoost, diagnosed the
+overfitting of XGBoost on training days, chose the calibration method (Platt versus
+isotonic) and the rolling-calibration window on validation data, ran the class-weighting
+experiment and the feature-group ablation, and saved the trained models. This work
+underlies the Methods and Experimental Setup sections and the Overfitting and Class
+Imbalance results. Notebook: \texttt{03\_model\_training}.
+
+\item \textbf{Sankalp M Tellur} (evaluation and calibration). Scored all models on the December test set
+(PR-AUC, ROC-AUC, Brier score, ECE), produced the precision--recall, ROC and reliability
+plots, set the operating point from the validation threshold, computed permutation
+importance, and generated the LaTeX tables and number macros that this report reads.
+This work underlies the Discrimination, Operating Point, Calibration and Feature
+Ablation and Importance results. Notebook: \texttt{04\_evaluation\_calibration}.
+
+\item \textbf{Prince Kumar Singh} (rescheduling). Designed and implemented the what-if rescheduling analysis:
+candidate moves of $\pm 1$ and $\pm 2$ hours with recomputed hour-dependent features,
+the gain and slot-capacity rules, the stated assumptions, and the sensitivity to the
+risk threshold. This work underlies the What-If Rescheduling section.
+Notebook: \texttt{05\_rescheduling}.
+\end{itemize}
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
