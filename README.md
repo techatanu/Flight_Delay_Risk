@@ -26,7 +26,7 @@ What we found:
 - With a threshold chosen on validation for precision >= 0.5, December precision holds (0.66 for XGBoost) but recall is only 0.035.
 - Rescheduling: of 1,979 flights with risk >= 0.5, only 133 have a move of up to ±2 h that cuts predicted risk by >= 0.05. Most of those moves are earlier in the day.
 
-All numbers come from `results/metrics.csv`, `results/calibration.csv` and `results/reschedule_summary.csv`. The report and slides read them through `results/tables/*.tex`.
+All numbers come from `results/metrics.csv`, `results/calibration.csv` and `results/reschedule_summary.csv`. The report reads them through `results/tables/*.tex`.
 
 ## Project structure
 
@@ -39,23 +39,21 @@ notebooks/
   05_rescheduling.ipynb            what-if rescheduling analysis
 results/      metrics, figures, tables (written by the notebooks)
 report/       IEEE-format report (LaTeX + PDF)
-slides/       Beamer presentation (LaTeX + PDF)
+slides/       presentation (PowerPoint + PDF)
 ```
 
 The notebooks must be run in order. Each one saves what the next one needs to `data/processed/` and `models/`. Those folders are not in the repo because they can be regenerated.
 
 ## How to run
 
-Needs Python 3.11, plus a LaTeX installation for the report and slides.
+Needs Python 3.11.
 
 ```bash
-make setup        # create .venv and install requirements
-make all          # run notebooks 01-05 in order (~1.5 min on a laptop)
-make report       # report/main.pdf
-make slides       # slides/slides.pdf
+pip install -r requirements.txt
 ```
 
-You can also open the notebooks in Jupyter and run them top to bottom, 01 to 05.
+Then open the notebooks in Jupyter and run them top to bottom, 01 to 05 (~1.5 min on a laptop).
+To rebuild the report PDF, compile `report/main.tex` with LaTeX (e.g. `latexmk -pdf main.tex` inside `report/`).
 
 ## Limitations
 
