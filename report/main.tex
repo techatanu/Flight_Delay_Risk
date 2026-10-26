@@ -5,6 +5,7 @@
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{xcolor}
 \usepackage[hidelinks]{hyperref}
 
@@ -45,6 +46,9 @@ moving flights earlier in the day.
 \begin{IEEEkeywords}
 flight delay prediction, gradient boosting, logistic regression, probability calibration, data leakage, temporal validation
 \end{IEEEkeywords}
+
+\noindent\textbf{Code:} \url{https://github.com/techatanu/Flight_Delay_Risk}\\
+\textbf{Dataset:} \url{https://www.kaggle.com/datasets/matinsajadi/flights}
 
 %=====================================================================
 \section{Introduction}
@@ -120,7 +124,8 @@ calibration under temporal shift rather than only ranking metrics.
 
 %=====================================================================
 \section{Dataset and Exploratory Analysis}
-We use the Kaggle copy of \texttt{nycflights13} \cite{nycflights13}: all 336{,}776
+We use the Kaggle copy of \texttt{nycflights13} \cite{nycflights13}
+(\url{https://www.kaggle.com/datasets/matinsajadi/flights}): all 336{,}776
 domestic departures from EWR, JFK and LGA in 2013, operated by 16 carriers to 105
 destinations with 4{,}043 aircraft. The data come from the BTS on-time performance
 reporting \cite{bts_ontime}.
@@ -485,6 +490,24 @@ recommended shifts at risk threshold 0.5.}
 \end{figure*}
 
 %=====================================================================
+\begin{table*}[t]
+\caption{Team contribution matrix}
+\label{tab:contrib}
+\centering
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.15\textwidth}p{0.09\textwidth}p{0.14\textwidth}>{\raggedright\arraybackslash}p{0.52\textwidth}}
+\toprule
+Member & Enroll.\ No. & Notebook & Contributions \\
+\midrule
+Atanu Adhikari & 2401010111 & 01 (EDA) & Data-quality audit, target definition, post-departure leakage columns, seasonality, time-of-day and persistence analysis, EDA figures; presentation slides \\
+Sambhav Kumar & 2401010409 & 02 (features) & 35 past-only features, Beta-prior smoothing, cyclic time encodings, automated leakage test; repository README \\
+Nishant Ranjan Singh & 2401010301 & 03 (training) & LR and XGBoost tuning, overfitting diagnosis, calibration method and rolling window, class-weighting experiment, feature ablation; report writing \\
+Sankalp M Tellur & 2401010416 & 04 (evaluation) & December test metrics, PR/ROC and reliability plots, operating point, permutation importance, LaTeX tables and number macros \\
+Prince Kumar Singh & 2401010353 & 05 (rescheduling) & What-if rescheduling rule, gain and slot-capacity constraints, assumptions, threshold sensitivity; report writing \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \section{Limitations}
 No weather forecast is available, and the day-level weather explains much of the
 variance; this caps discrimination for any day-ahead model on this data. The data
@@ -508,46 +531,9 @@ will compare these models with a compact MLP that learns embeddings for carrier,
 origin and destination on the same split and features.
 
 \section*{Team Contributions}
-The project was divided into five work packages, one per notebook, and the notebooks
-pass their outputs to one another in order. The report, slides and README were shared out as listed below.
-\begin{itemize}
-\item \textbf{Atanu Adhikari} (exploratory data analysis and presentation). Audited data quality (cancelled and diverted flights, missing tail
-numbers, duplicate ids), fixed the delay target and identified the post-departure
-columns that must be excluded, and analysed seasonality, time of day, day of week,
-carriers, routes and day-to-day persistence. This work underlies the Dataset and
-Exploratory Analysis section, including the base-rate differences between the
-training, validation and test months. Also prepared the presentation slides.
-Notebook: \texttt{01\_eda}.
+The project was divided into five work packages, one per notebook; the notebooks pass
+their outputs to one another in order. Table~\ref{tab:contrib} lists each member's work.
 
-\item \textbf{Sambhav Kumar} (feature engineering and README). Built the 35 schedule, calendar, congestion and
-history features, including the past-only aggregation, the Beta-prior smoothing and the
-cyclic time encodings, and wrote the leakage test that rebuilds the features after
-corrupting all outcomes from a cutoff date, together with the check that a deliberately
-leaky version is detected. This work underlies the Problem Formulation and Feature
-Engineering sections. Also wrote the repository README.
-Notebook: \texttt{02\_feature\_engineering}.
-
-\item \textbf{Nishant Ranjan Singh} (model training and report). Tuned logistic regression and XGBoost, diagnosed the
-overfitting of XGBoost on training days, chose the calibration method (Platt versus
-isotonic) and the rolling-calibration window on validation data, ran the class-weighting
-experiment and the feature-group ablation, and saved the trained models. This work
-underlies the Methods and Experimental Setup sections and the Overfitting and Class
-Imbalance results. Co-wrote this report.
-Notebook: \texttt{03\_model\_training}.
-
-\item \textbf{Sankalp M Tellur} (evaluation and calibration). Scored all models on the December test set
-(PR-AUC, ROC-AUC, Brier score, ECE), produced the precision--recall, ROC and reliability
-plots, set the operating point from the validation threshold, computed permutation
-importance, and generated the LaTeX tables and number macros that this report reads.
-This work underlies the Discrimination, Operating Point, Calibration and Feature
-Ablation and Importance results. Notebook: \texttt{04\_evaluation\_calibration}.
-
-\item \textbf{Prince Kumar Singh} (rescheduling and report). Designed and implemented the what-if rescheduling analysis:
-candidate moves of $\pm 1$ and $\pm 2$ hours with recomputed hour-dependent features,
-the gain and slot-capacity rules, the stated assumptions, and the sensitivity to the
-risk threshold. This work underlies the What-If Rescheduling section. Co-wrote this report.
-Notebook: \texttt{05\_rescheduling}.
-\end{itemize}
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
