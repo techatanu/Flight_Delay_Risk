@@ -1,0 +1,21 @@
+{
+  "leaf_hybrid": {
+    "hidden": [
+      64,
+      32
+    ],
+    "dropout": 0.3,
+    "weight_decay": 0.0001,
+    "lr": 0.001,
+    "seq_len": 14,
+    "gru_hidden": 16,
+    "leaf_dim": 4,
+    "leaf_dropout": 0.5,
+    "n_trees": 308,
+    "params": 48805,
+    "best_epoch": 3
+  },
+  "blend_weight_temporal": 0.3,
+  "final_model": "Temporal (MLP + GRU)",
+  "final_column": "p_temporal"
+}
