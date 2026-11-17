@@ -1,22 +1,24 @@
-# Run every target from inside phase-2/.
-PY  := ../.venv/bin/python
+# Run every target from the repository root (the folder that contains this Makefile).
+PY  := .venv/bin/python
 RUN := $(PY) -m nbconvert --to notebook --execute --ExecutePreprocessor.timeout=3600
 
 .PHONY: setup all phase1 notebooks test report clean
 
 # one-time: virtual environment in the repository root with the Phase 2 packages
 setup:
-	python3.11 -m venv ../.venv
+	python3.11 -m venv .venv
 	$(PY) -m pip install -r requirements.txt
 
 # full Phase 2 pipeline (about 35 min on a laptop CPU)
 all: phase1 notebooks test
 
 # Phase 1 outputs that Phase 2 reads (features, LR/XGBoost models, predictions).
-# The executed copies go to build/, so the graded Phase 1 notebooks are not rewritten.
+# The Phase 1 notebooks write to ML_Phase-1/data and ML_Phase-1/models and need
+# ML_Phase-1/data_raw/flights.csv. The executed copies go to build/, so the graded
+# Phase 1 notebooks themselves are not rewritten.
 phase1:
-	$(RUN) --output-dir=build ../notebooks/02_feature_engineering.ipynb
-	$(RUN) --output-dir=build ../notebooks/03_model_training.ipynb
+	$(RUN) --output-dir=build ML_Phase-1/notebooks/02_feature_engineering.ipynb
+	$(RUN) --output-dir=build ML_Phase-1/notebooks/03_model_training.ipynb
 
 # notebooks 06-10 in order; each one reads what the previous one saved
 notebooks:

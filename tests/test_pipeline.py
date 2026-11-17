@@ -1,6 +1,6 @@
 """Checks that the Phase 2 results respect the evaluation protocol.
 
-Run from phase-2/ with `make test` (or `python -m unittest discover -s tests -v`)
+Run from the repository root with `make test` (or `python -m unittest discover -s tests -v`)
 after the notebooks have been executed. Tests that need generated files
 (data/processed, models) are skipped when those files do not exist yet.
 
@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 PHASE2 = Path(__file__).resolve().parents[1]
-ROOT = PHASE2.parent
+ROOT = PHASE2 / "ML_Phase-1"   # Phase 1 folder (PHASE2 is the repository root)
 RESULTS = PHASE2 / "results"
 P1_DATA = ROOT / "data" / "processed"
 P2_DATA = PHASE2 / "data" / "processed"
