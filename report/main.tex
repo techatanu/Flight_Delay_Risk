@@ -1,0 +1,542 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{../results/figures/}}
+\input{../results/tables/numbers.tex}
+
+\begin{document}
+
+\title{Deep Learning for Day-Ahead Flight Delay Risk:\\Embeddings, a Temporal GRU and Tree Hybrids}
+
+\author{
+\IEEEauthorblockN{Atanu Adhikari, Prince Singh, Sambhav Kumar,\\
+Nishant Ranjan Singh, Sankalp M Tellur}
+\IEEEauthorblockA{Advanced Machine Learning Course Project 21 --- Phase 2 (Deep Learning)}
+}
+
+\maketitle
+
+\begin{abstract}
+Phase~1 of this project predicted, on the evening before departure, whether a flight
+leaving New York in 2013 will arrive 15 or more minutes late, using logistic regression
+and XGBoost on 35 leakage-free schedule, congestion and delay-history features. In
+Phase~2 we keep the same features, decision time, chronological split and metrics, and
+ask whether deep learning adds anything. We train, in PyTorch, (i)~a compact MLP with
+learned embeddings for carrier, origin and destination, (ii)~a temporal model that adds
+a GRU reading the 14 days of airport, carrier and system delay statistics before the
+flight, and (iii)~two hybrids with the Phase~1 XGBoost: tree-leaf embeddings fed into
+the network, and a probability blend. The temporal model, selected on validation,
+reaches a December PR-AUC of \TemporalTestPR{} against \XgboostTestPR{} for XGBoost
+(day-level bootstrap 95\% interval of the difference
+$[\TemporalCILow,\,\TemporalCIHigh]$) and raises the best achievable recall at 50\%
+precision from \XgboostRecallPfifty{} to \TemporalRecallPfifty. Neither hybrid beats
+the temporal network. Ablations over three seeds show that the GRU recovers most of the
+signal when the hand-made history features are removed, that early stopping is the
+regulariser that matters, and that the learned embeddings bring no measurable gain over
+one-hot inputs.
+\end{abstract}
+
+\begin{IEEEkeywords}
+flight delay, deep learning, entity embeddings, GRU, hybrid models, calibration
+\end{IEEEkeywords}
+
+%=====================================================================
+\section{Introduction}
+Delays cost U.S. airlines and passengers billions of dollars a year, and a risk score
+available the evening before a flight lets an airline warn passengers, re-plan crews or
+consider moving a departure \cite{sternberg2017review}. Phase~1 built such a score from
+features known at that decision time: the published schedule, scheduled congestion and
+smoothed delay rates of carriers, airports, routes and aircraft over strictly earlier
+days. XGBoost \cite{chen2016xgboost} reached a December PR-AUC of \XgboostTestPR{} and
+logistic regression \LrTestPR, against a base rate of \PriorRateTestPR.
+
+The project brief names the gap these models leave: manual route and congestion
+summaries ``may miss complex interactions between time, airport, carrier and recent
+delay dynamics''. A seven-day mean and yesterday's rate compress a trajectory into two
+numbers; a storm that builds over three days and one that hit a week ago can look the
+same. Phase~2 therefore asks three questions, all under the Phase~1 protocol so that
+the comparison is fair:
+\begin{enumerate}
+\item Does a compact network with learned category embeddings, the model required by
+  the brief, improve on the Phase~1 models?
+\item Does reading the ordered daily history with a recurrent layer add information
+  beyond the hand-made summaries?
+\item Does combining the trees with the network (a hybrid) improve on both?
+\end{enumerate}
+Our contributions are a leakage-tested sequence input built only from earlier days,
+a PyTorch embedding MLP and temporal GRU model tuned on validation only, two hybrids
+with an explicit rationale, an ablation study over eleven variants and three seeds, and
+a calibration and operating-point analysis under the strong base-rate shift into
+December.
+
+%=====================================================================
+\section{Related Work}
+\subsection{Deep learning for flight delays}
+Kim et al.~\cite{kim2016deep} used recurrent networks on sequences of daily airport
+delay states to predict day-level delay, followed by a second network for individual
+flights, and reported gains over shallow models. Gui et al.~\cite{gui2020} compared an
+LSTM and random forests on large aviation data and found the LSTM prone to overfitting,
+with the forest more accurate on their task. Yazdi et al.~\cite{yazdi2020} combined a
+stacked denoising autoencoder with Levenberg--Marquardt training. Rebollo and
+Balakrishnan~\cite{rebollo2014} and Pyrgiotis et al.~\cite{pyrgiotis2013} showed that
+network-wide delay states and their propagation carry much of the predictive signal.
+This motivates our temporal branch: it reads exactly such daily delay states, but only
+of days before the flight. Most published studies use random splits and features
+recorded after departure, which inflates results~\cite{kaufman2012leakage}; we keep the
+Phase~1 decision time and chronological split.
+
+\subsection{Deep learning on tabular data}
+Benchmarks consistently find that tuned tree ensembles match or beat neural networks on
+medium-sized tabular data \cite{grinsztajn2022,shwartz2022}, and that a well-regularised
+MLP is a strong neural baseline \cite{gorishniy2021}. We therefore do not assume that the
+network will win, and compare against the tuned Phase~1 XGBoost rather than a weak tree.
+Entity embeddings \cite{guo2016entity} map each category to a learned dense vector so
+that similar carriers or airports can share statistical strength; we size them with the
+fast.ai rule \cite{howard2020fastai}. For sequences we use a GRU
+\cite{cho2014gru}, a gated recurrent unit with fewer parameters than an LSTM
+\cite{hochreiter1997}, which suits our short 14-step inputs.
+
+\subsection{Hybrids, regularisation and calibration}
+He et al.~\cite{he2014facebook} used the leaves of boosted trees as input features of a
+linear model, and DeepGBM \cite{ke2019deepgbm} distils tree structure into a network;
+Wide~\&~Deep \cite{cheng2016wide} joins a memorising component and a generalising one.
+Our leaf hybrid follows these ideas. Against overfitting we use dropout
+\cite{srivastava2014dropout}, decoupled weight decay (AdamW)
+\cite{kingma2015adam,loshchilov2019adamw} and early stopping \cite{prechelt1998}.
+Modern networks are often over-confident; Guo et al.~\cite{guo2017calibration} propose
+temperature scaling, which we compare with Platt scaling \cite{platt1999} and isotonic
+regression \cite{zadrozny2002}.
+
+%=====================================================================
+\section{Data and Decision-Time Protocol}
+We use the 2013 NYC flights data \cite{nycflights13}, a public extract of the BTS
+on-time database \cite{bts_ontime}: 336{,}776 departures from EWR, JFK and LGA, of
+which 327{,}346 have an arrival delay. The target is $y=\mathbf{1}[\text{arrival delay}
+\ge 15\,\text{min}]$. Cancelled and diverted flights have no label; they are not used as
+examples but still count in the scheduled-volume features.
+
+\textbf{Decision time and split.} Predictions are made the evening before the flight.
+All 35 inputs are the Phase~1 features: 3 categorical (carrier, origin, destination) and
+32 numeric (cyclic times, scheduled congestion, 15 historical delay rates over strictly
+earlier dates). The split is unchanged: train January--September (244{,}737 flights,
+25.0\% delayed), validation October--November (55{,}589, 17.8\%), test December (27{,}020,
+33.5\%). Every hyperparameter, epoch count, calibration method, window, hybrid weight
+and the choice of the final model is made on validation. December is only scored.
+
+\textbf{Network inputs.} Numeric features are median-imputed and standardised with
+training statistics. Categories are mapped to integer ids from the training vocabulary,
+with id~0 for categories never seen in training (one destination).
+
+\textbf{Daily history sequence.} For each calendar day we compute ten values: the system,
+origin-airport and carrier delay rates, the mean arrival delay and cancellation share of
+the system and the origin, the origin's number of departures, and a validity flag. Carrier
+rates are shrunk towards the system rate with 10 pseudo-flights, because small carriers
+fly few legs a day. For a flight on day $d$ the GRU reads days $d-14,\dots,d-1$ in time
+order for its origin and carrier; days before 1 January are zero-padded with the flag set
+to~0. Fig.~\ref{fig:daily} shows the origin delay rates: December is clearly the worst
+month, the shift Phase~1 already found.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{daily_origin_rate.pdf}
+\caption{Daily share of delayed arrivals per origin airport (7-day mean). December, the
+test month (grey), is far above the validation months.}
+\label{fig:daily}
+\end{figure}
+
+\textbf{Leakage test for the sequences.} As in Phase~1, we overwrite every outcome from
+10~February onwards with random values, rebuild the daily table and check that the
+28-day sequences of all 33{,}936 flights up to that date are bit-identical. A
+deliberately leaky version, in which the sequence ends on the flight day, fails the
+test, so the test can detect leakage.
+
+%=====================================================================
+\section{Architecture}
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+  font=\footnotesize, >={Stealth[length=2mm]}, node distance=3mm and 9mm,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, inner sep=3pt},
+  inp/.style={box, fill=gray!8, text width=30mm},
+  op/.style={box, text width=22mm},
+  dense/.style={box, fill=orange!12, text width=21mm}]
+\node[inp] (num) {32 numeric features (schedule, congestion, history rates)};
+\node[inp, below=of num] (cat) {carrier, origin, destination ids};
+\node[inp, below=of cat] (seq) {daily delay statistics, days $d-14..d-1$ ($14\times10$)};
+\node[inp, below=of seq, dashed, fill=violet!6] (leaf) {leaf ids of the flight in 308 XGBoost trees};
+\node[op, right=of cat, fill=blue!8] (E) {embeddings\\$8+3+10$};
+\node[op, right=of seq, fill=red!8] (G) {GRU, 16 units\\(last state $h_{14}$)};
+\node[op, right=of leaf, fill=violet!6, dashed] (L) {mean leaf vector (size 4), dropout 0.5};
+\path (num.north -| E.east) ++(9mm,0) node[box, fill=gray!4, anchor=north west, text width=10mm,
+  minimum height=46mm] (cc) {concat\\$69$\\(+4)};
+\node[dense, right=9mm of cc] (d1) {Dense 64, ReLU,\\dropout 0.3};
+\node[dense, right=6mm of d1] (d2) {Dense 32, ReLU,\\dropout 0.3};
+\node[box, fill=green!12, right=6mm of d2, text width=16mm] (out) {logit, sigmoid\\$\hat p$};
+\node[below=2mm of d2, font=\scriptsize, align=center] {BCE loss, AdamW, early stopping on validation PR-AUC};
+\draw[->] (num.east) -- (num.east -| cc.west);
+\draw[->] (cat) -- (E);
+\draw[->] (E.east) -- (E.east -| cc.west);
+\draw[->] (seq) -- (G);
+\draw[->] (G.east) -- (G.east -| cc.west);
+\draw[->] (leaf) -- (L);
+\draw[->, dashed] (L.east) -- (L.east -| cc.west);
+\draw[->] (cc) -- (d1);
+\draw[->] (d1) -- (d2);
+\draw[->] (d2) -- (out);
+\end{tikzpicture}
+\caption{The Phase~2 network. Without the GRU row it is the embedding MLP
+(\MLPParams{} parameters); with it, the temporal model (\TemporalParams{} parameters);
+adding the dashed leaf row gives the leaf hybrid (\HybridParams{} parameters).}
+\label{fig:arch}
+\end{figure*}
+
+\subsection{Embedding MLP}
+For a flight with standardised numeric features $x\in\mathbb{R}^{32}$ and categories
+$(c,o,d)$, the input of the MLP is
+\begin{equation}
+u = [\,x;\ E_c[c];\ E_o[o];\ E_d[d]\,],
+\end{equation}
+where $E_c\in\mathbb{R}^{17\times 8}$, $E_o\in\mathbb{R}^{4\times 3}$ and
+$E_d\in\mathbb{R}^{104\times 10}$ are learned tables (one extra row each for the unknown
+id, fixed at zero). The size $\min(10, \mathrm{round}(1.6\,n^{0.56}))$ for $n$ categories
+\cite{howard2020fastai} gives 8, 3 and 10. An embedding lookup is equivalent to a linear
+layer applied to a one-hot vector, but it is cheaper and lets the gradient update only the
+rows that occur in a batch. Two hidden layers follow:
+\begin{align}
+a_1 &= \mathrm{Dropout}(\mathrm{ReLU}(W_1 u + b_1)),\\
+a_2 &= \mathrm{Dropout}(\mathrm{ReLU}(W_2 a_1 + b_2)),\\
+\hat p &= \sigma(w_3^{\top} a_2 + b_3).
+\end{align}
+The output bias is initialised to $\mathrm{logit}(\bar y_{\text{train}})$ so that training
+starts from the base rate rather than from $\hat p = 0.5$.
+
+\subsection{Temporal branch}
+The 14 daily vectors $s_1,\dots,s_{14}$ enter a GRU \cite{cho2014gru}:
+\begin{align}
+z_t &= \sigma(W_z s_t + U_z h_{t-1}),\quad r_t = \sigma(W_r s_t + U_r h_{t-1}),\\
+\tilde h_t &= \tanh(W_h s_t + U_h(r_t \odot h_{t-1})),\\
+h_t &= (1-z_t)\odot h_{t-1} + z_t \odot \tilde h_t .
+\end{align}
+The update gate $z_t$ decides how much of the running summary to replace; the reset gate
+$r_t$ lets the unit forget old days when a new pattern starts. The last state
+$h_{14}\in\mathbb{R}^{16}$ is concatenated to $u$ (Fig.~\ref{fig:arch}). Because the gates
+are learned, the GRU can weight recent days more or less than the fixed 7-day and
+previous-day windows of the Phase~1 features.
+
+\subsection{Hybrid models}
+\textbf{Leaf hybrid (trees $\rightarrow$ network).} The Phase~1 XGBoost (308 trees of
+depth~4, trained on January--September) splits the numeric history features at sharp
+thresholds, which a ReLU network approximates only with many units. Each tree sends a
+flight to one leaf, so a flight is described by 308 leaf ids. Following
+\cite{he2014facebook,ke2019deepgbm}, every leaf gets a learned vector of size
+\LeafDim; the mean of a flight's 308 vectors (an \texttt{EmbeddingBag}) is concatenated
+to the temporal model's input. The trees supply the partitions, the network learns how
+to weigh them together with the embeddings and the GRU. The leaf vector size, learning
+rate and a dropout on the leaf vector were searched on validation
+(selected: size \LeafDim, learning rate \LeafLR, dropout \LeafDropout).
+
+\textbf{Blend (late fusion).} $\hat p = w\,\hat p_{\text{temporal}} +
+(1-w)\,\hat p_{\text{XGB}}$ with $w\in\{0,0.1,\dots,1\}$ chosen on validation log loss
+(selected $w=\BlendWeight$). It can only help if the two models make different errors.
+
+%=====================================================================
+\section{Training and Regularisation}
+All networks minimise the binary cross-entropy
+\begin{equation}
+\mathcal{L} = -\frac{1}{B}\sum_{i=1}^{B}\big[y_i\log\hat p_i + (1-y_i)\log(1-\hat p_i)\big],
+\end{equation}
+computed on the logit for numerical stability. Its gradient with respect to the logit is
+simply $\hat p_i - y_i$. We do not weight the classes: Phase~1 showed that weighting
+leaves the ranking unchanged but pushes every probability up, and calibrated
+probabilities are a required output. The optimiser is AdamW
+\cite{loshchilov2019adamw} with batch size 1024, decoupled weight decay on weights and
+embeddings (not on biases), and gradient-norm clipping at~5 to protect the GRU.
+
+The main danger is overfitting to individual training days. Several inputs, such as
+yesterday's system delay rate, are constant within a day, so together they identify the
+date, and a flexible model can memorise which training days were bad. Phase~1 met the
+same problem with XGBoost and needed leaves of at least 2{,}000 hessian weight. For the
+networks we use dropout \cite{srivastava2014dropout}, weight decay and, above all, early
+stopping \cite{prechelt1998}: after every epoch we score validation PR-AUC, stop after
+four epochs without improvement and restore the best epoch.
+
+\textbf{Hyperparameter search.} The grid crosses hidden sizes $\{(64,32),(128,64)\}$,
+dropout $\{0.1,0.3\}$, weight decay $\{10^{-4},10^{-2}\}$ and learning rate
+$\{10^{-3},3\cdot10^{-4}\}$; the temporal model also tries GRU sizes 16 and 32
+(16 settings for the MLP, 32 for the temporal model, seed 42). Both models selected
+$(64,32)$ units, dropout 0.3, weight decay $10^{-4}$ and learning rate $10^{-3}$, and a
+16-unit GRU. The validation PR-AUC varies by less than 0.01 over the whole grid, so the
+result does not hinge on a lucky setting. The selected models were retrained with seeds
+42, 43 and 44; seed~42 was fixed in advance as the reported model.
+
+\textbf{Sanity checks.} With dropout and decay switched off, the temporal network drives
+the training loss on 256 flights below 0.05, so model and training loop can fit data.
+Reloading every saved model reproduces its predictions exactly.
+
+Fig.~\ref{fig:curves} shows the behaviour that motivates early stopping: training loss
+keeps falling while validation loss turns up after a few epochs. The best epoch is
+\MLPEpoch{} for the MLP and \TemporalEpoch{} for the temporal model.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{learning_curves.pdf}
+\caption{Learning curves (seed 42). Left: training (dashed) and validation loss. Right:
+validation PR-AUC; dots mark the epochs restored by early stopping.}
+\label{fig:curves}
+\end{figure}
+
+%=====================================================================
+\section{Evaluation Protocol}
+We report PR-AUC (average precision) as the headline metric for the imbalanced target
+\cite{saito2015}, ROC-AUC, the Brier score, log loss and the expected calibration error
+(ECE, 10 equal-width bins). The operating point follows Phase~1: the lowest threshold
+with validation precision $\geq 0.5$ is fixed and applied to December. We also report
+the best recall reachable at precision $\geq 0.5$ on the December curve itself, which is
+only a reference for what a threshold could achieve.
+
+\textbf{Calibration.} Temperature scaling $\hat p=\sigma(z/T)$ \cite{guo2017calibration},
+Platt scaling $\hat p=\sigma(az+b)$ and isotonic regression are each fitted on October and
+scored on November and vice versa; the method with the lower mean Brier score is refitted
+on all of validation. As in Phase~1 we also apply a rolling Platt recalibration that is
+refitted every day on the previous $w$ days of out-of-sample scores and outcomes (known at
+the decision time), with $w\in\{7,14,28\}$ chosen on November.
+
+\textbf{Uncertainty.} Flights on the same day share weather and are strongly correlated,
+so resampling single flights would give intervals that are far too narrow. We resample
+the 31 December days with replacement (2{,}000 replicates) and compute the PR-AUC
+difference of two models on the same resampled days, a block bootstrap with one-day
+blocks \cite{kunsch1989}. Neural-network results are also repeated over three seeds.
+
+%=====================================================================
+\section{Results}
+\subsection{Discrimination}
+Table~\ref{tab:main} compares all models. Both networks beat the Phase~1 models on
+December: the embedding MLP reaches \EmbeddingMlpTestPR{} and the temporal model
+\TemporalTestPR{}, against \XgboostTestPR{} for XGBoost and \LrTestPR{} for logistic
+regression. The temporal model also has the best validation PR-AUC (\TemporalValPR) and
+is therefore the final Phase~2 model; the selection did not look at December.
+
+\begin{table}[t]
+\centering
+\caption{Validation and December results (raw probabilities, seed 42). Recall@P$\geq$0.5
+is read off the December curve.}
+\label{tab:main}
+\resizebox{\columnwidth}{!}{\input{../results/tables/main_results.tex}}
+\end{table}
+
+The gain is not an accident of one split of days or one initialisation
+(Table~\ref{tab:boot}). The day-level bootstrap interval of the difference to XGBoost is
+$[\TemporalCILow,\,\TemporalCIHigh]$ for the temporal model and
+$[\EmbeddingMlpCILow,\,\EmbeddingMlpCIHigh]$ for the MLP, both above zero. Over three
+seeds the MLP is very stable (December PR-AUC \MLPSeedMean{} $\pm$ \MLPSeedStd) while the
+temporal model varies more (\TemporalSeedMean{} $\pm$ \TemporalSeedStd); its advantage
+over the MLP is within this spread, and the bootstrap interval for temporal minus MLP
+contains zero. We therefore read the evidence as: the networks beat the trees, by a
+margin whose interval lies above zero but starts close to it, and the GRU adds a
+smaller gain that we cannot separate from noise on one test month.
+
+\begin{table}[t]
+\centering
+\caption{Paired day-level bootstrap of the December PR-AUC difference (2{,}000
+replicates). ``Share $>0$'': fraction of replicates in which the first model wins.}
+\label{tab:boot}
+\resizebox{\columnwidth}{!}{\input{../results/tables/bootstrap.tex}}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{pr_roc_test.pdf}
+\caption{December precision--recall and ROC curves. The networks dominate the Phase~1
+models over most of the recall range, most clearly at high precision.}
+\label{fig:prroc}
+\end{figure*}
+
+Fig.~\ref{fig:prroc} shows where the gain comes from: at high precision. At 50\%
+precision the best reachable recall rises from \XgboostRecallPfifty{} (XGBoost) to
+\TemporalRecallPfifty{} (temporal model), so the network ranks the most clearly
+endangered flights better. At low precision all models converge, because many delays
+are caused by same-day weather that no evening-before feature can see.
+
+\subsection{Hybrids}
+Both hybrids improve on XGBoost (leaf hybrid \LeafHybridTestPR, blend
+\BlendTestPR; bootstrap intervals above zero in Table~\ref{tab:boot}), so the network
+adds value to the tree model. Neither, however, improves on the temporal network: the
+leaf hybrid is slightly below it on validation (\LeafHybridValPR{} vs.\ \TemporalValPR)
+and on December, and the interval of their difference contains zero. Its search was
+informative. Without dropout on the leaf vector it reached its best validation score in
+the first epoch: the roughly 40{,}000 extra parameters (one vector per leaf id; \HybridParams{}
+in total) let the network memorise training days faster. Dropout of 0.5 on the averaged leaf vector was
+needed to make it competitive. The blend puts only \BlendWeight{} of the weight on the
+network because that lowers the validation log loss, but it lowers the PR-AUC: the two models'
+validation scores have a correlation of 0.83 and XGBoost is the weaker one, so averaging
+adds little independent information. In this problem the partitions the trees learn are
+built from the same 35 features the network already sees; a hybrid would need a signal
+the network lacks (for example weather forecasts) to add value beyond it.
+
+\subsection{Ablation studies}
+Table~\ref{tab:abl} and Fig.~\ref{fig:abl} change one component of the temporal model at a
+time, each over three seeds.
+
+\begin{table}[t]
+\centering
+\caption{Ablations of the temporal model: PR-AUC, mean $\pm$ standard deviation over
+seeds 42--44.}
+\label{tab:abl}
+\resizebox{\columnwidth}{!}{\input{../results/tables/ablation.tex}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{ablations.pdf}
+\caption{PR-AUC change of each ablation relative to the selected temporal model (mean of
+three seeds; bars show the seed standard deviation).}
+\label{fig:abl}
+\end{figure}
+
+\textbf{History is the core signal, and the GRU can learn it.} Removing the 15 Phase~1
+history features and the GRU drops December PR-AUC to \AblNoHistNoGRUTest. With the GRU
+reading the raw 14-day sequence instead, it recovers to \AblNoHistTest: the recurrent
+branch learns from the ordered daily states most of what the hand-made rates encode. With
+both, the extra gain of the GRU is small (\AblBaseTest{} vs.\ \AblNoGRUTest{} without
+it). This variant also shows why validation must not be read in isolation: without any
+history the model scores \emph{best} on validation (\AblNoHistNoGRUVal) yet worst on
+December. October and November were calm months in which yesterday's delays say little,
+whereas December was driven by multi-day weather episodes.
+
+\textbf{Sequence length.} Seven days performs slightly better on December
+(\AblSevenDaysTest) than 14 or 28 days, within one to two seed standard deviations:
+recent days matter most, older days add noise.
+
+\textbf{Embeddings bring no measurable gain.} One-hot categories (\AblOneHotTest) and even
+no category input at all (\AblNoCatTest) are at least as good as learned embeddings on
+December. The carrier, airport and route histories already describe the categories, so
+their identities add little, and the embeddings slightly overfit category-specific
+patterns that change in December. This is consistent with tabular benchmarks
+\cite{grinsztajn2022} and is an honest negative result for the component the brief
+emphasises.
+
+\textbf{Regularisation.} Removing dropout or weight decay changes PR-AUC by less than the
+seed spread, but training a fixed 40 epochs without early stopping lowers PR-AUC from
+\AblBaseVal{} to \AblNoESVal{} on validation and from \AblBaseTest{} to \AblNoESTest{} on
+December (Fig.~\ref{fig:curves}). For these small networks, early stopping is the
+regulariser that matters.
+
+\subsection{Calibration}
+Table~\ref{tab:cal} and Fig.~\ref{fig:cal} show the base-rate shift Phase~1 already
+found. The raw network outputs are reasonably calibrated on December (ECE
+\TemporalRawECE), because the network keeps roughly the training base rate of 25\%,
+which is closer to December's 33.5\% than the 17.8\% of the calibration months. Calibrating on October--November, where only 17.8\% of
+flights were delayed, teaches the model that delays are rare and makes December
+\emph{worse} (ECE \TemporalCalECE). The Oct/Nov cross-check selected Platt scaling for
+every network; temperature scaling, the usual fix for over-confident networks
+\cite{guo2017calibration}, cannot move the base rate and was not chosen. The rolling
+Platt recalibration over the previous \FinalRollWindow{} days adapts to the shift
+(ECE \TemporalRollECE, as for XGBoost: \XgboostRollECE). Calibration under drift is a
+property of the deployment procedure more than of the model \cite{gama2014}.
+
+\begin{table}[t]
+\centering
+\caption{December calibration of XGBoost and the final Phase~2 model.}
+\label{tab:cal}
+\resizebox{\columnwidth}{!}{\input{../results/tables/calibration.tex}}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{calibration_test.pdf}
+\caption{Left: reliability diagram of the temporal model on December. Right: daily mean
+predicted risk against the observed delay share.}
+\label{fig:cal}
+\end{figure*}
+
+\subsection{Operating point}
+With the threshold fixed on validation for precision $\geq 0.5$, December precision holds
+for all models (Table~\ref{tab:op}), but recall is low, because a threshold set in calm
+months is very strict in December. With rolling recalibration the temporal model flags
+far more flights at similar precision: recall \TemporalRollRecall{} at precision
+\TemporalRollPrec, roughly twice XGBoost's \XgboostRollRecall{} at \XgboostRollPrec.
+
+\begin{table}[t]
+\centering
+\caption{Operating point fixed on validation (precision $\geq$ 0.5), applied to
+December.}
+\label{tab:op}
+\resizebox{\columnwidth}{!}{\input{../results/tables/operating_point.tex}}
+\end{table}
+
+%=====================================================================
+\section{Discussion and Limitations}
+The networks improve discrimination at the decision time the project prescribes, and the
+improvement is concentrated where it is useful: flights with the clearest risk. The
+largest single effect, however, comes from history, not from architecture: whichever model
+reads the past (as features or as a sequence) does well, and models that do not fail in
+December. The value of the GRU is that it learns this from raw daily states.
+
+The limits are those of Phase~1 plus some of our own. The data cover one year and three
+airports, so December is a single test month and the test set has only 31 independent
+days; the bootstrap intervals are correspondingly wide. No weather forecasts are
+available, which caps any evening-before model. The temporal model is sensitive to the
+seed (one seed stops after one epoch), so a deployed version should average several seeds.
+The hybrids and the embedding ablations are negative results under this data and should
+not be generalised.
+
+%=====================================================================
+\section{Conclusion}
+Under the Phase~1 protocol, a compact PyTorch network with category embeddings and a GRU
+over 14 days of delay history raises December PR-AUC from \XgboostTestPR{} to
+\TemporalTestPR{} (seed 42; \TemporalSeedMean{} $\pm$ \TemporalSeedStd{} over three
+seeds), with a day-level bootstrap interval above zero. The best recall reachable at 50\%
+precision on the December curve rises from \XgboostRecallPfifty{} to
+\TemporalRecallPfifty; at the threshold fixed on validation, recall rises from
+\XgboostRawRecall{} to \TemporalRawRecall{} with raw probabilities and from
+\XgboostRollRecall{} to \TemporalRollRecall{} with rolling recalibration. The GRU recovers
+most of the signal of the hand-made history features from raw data. Two hybrids with the
+Phase~1 XGBoost were implemented and evaluated honestly; neither beats the network.
+Calibrated probabilities under the seasonal shift require rolling recalibration for any
+model.
+
+\textbf{Reproducibility.} Notebooks 06--10 in the \texttt{notebooks} folder of the project
+repository (\url{https://github.com/techatanu/Flight_Delay_Risk}; Phase~1 is in
+\texttt{ML\_Phase-1}) build every number, table and figure in this report from the
+Phase~1 outputs, using PyTorch
+\cite{paszke2019pytorch} and scikit-learn \cite{pedregosa2011}.
+
+%=====================================================================
+\section*{Team Contributions}
+Phase~2 was split into five work packages, one notebook each, which pass their outputs
+to one another in order.
+\begin{itemize}
+\item \textbf{Atanu Adhikari} (deep learning data pipeline). Prepared the network inputs
+from the Phase~1 features, designed the 14-day daily history sequence, wrote its leakage
+test and the check that a leaky version is detected, extracted the XGBoost leaf ids for
+the hybrid, wrote the Makefile and the protocol tests (\texttt{tests/test\_pipeline.py}),
+and prepared the presentation. Notebook: \texttt{06\_dl\_data\_pipeline}.
+\item \textbf{Sambhav Kumar} (embedding MLP and temporal model). Implemented the PyTorch
+network with embeddings and the GRU branch, the training loop with AdamW and early
+stopping, the sanity checks, the hyperparameter search, the three-seed runs and the
+learning curves. Notebook: \texttt{07\_embedding\_mlp\_and\_temporal}.
+\item \textbf{Nishant Ranjan Singh} (hybrid models). Designed and implemented the
+tree-leaf hybrid and the probability blend with their validation searches, and the
+selection of the final Phase~2 model. Notebook: \texttt{08\_hybrid\_models}.
+\item \textbf{Sankalp M Tellur} (ablation studies). Designed and ran the eleven ablation
+variants over three seeds and interpreted them, and wrote this report.
+Notebook: \texttt{09\_ablation\_studies}.
+\item \textbf{Prince Singh} (evaluation and calibration). Compared all models with the
+Phase~1 results, implemented temperature, Platt, isotonic and rolling calibration, the
+operating point and the day-level bootstrap, and generated the figures and tables used
+in this report. Notebook: \texttt{10\_evaluation\_calibration}.
+\end{itemize}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
