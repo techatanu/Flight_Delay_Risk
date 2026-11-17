@@ -1,0 +1,13 @@
+\begin{tabular}{llccc}
+\toprule
+Model & Probabilities & Brier & ECE & Mean $\hat p$ \\
+\midrule
+XGBoost & raw & 0.2163 & 0.0734 & 0.269 \\
+XGBoost & calibrated (Oct--Nov) & 0.2205 & 0.1017 & 0.234 \\
+XGBoost & rolling Platt & 0.2150 & 0.0474 & 0.298 \\
+\midrule
+Temporal (MLP+GRU) & raw & 0.2080 & 0.0550 & 0.286 \\
+Temporal (MLP+GRU) & calibrated (Oct--Nov) & 0.2223 & 0.1269 & 0.209 \\
+Temporal (MLP+GRU) & rolling Platt & 0.2133 & 0.0533 & 0.286 \\
+\bottomrule
+\end{tabular}

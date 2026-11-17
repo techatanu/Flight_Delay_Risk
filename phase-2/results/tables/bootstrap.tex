@@ -1,0 +1,12 @@
+\begin{tabular}{lccc}
+\toprule
+Comparison & $\Delta$ PR-AUC & 95\% CI & Share $>0$ \\
+\midrule
+Embedding MLP - XGBoost & +0.029 & [+0.009, +0.045] & 1.00 \\
+Temporal (MLP+GRU) - XGBoost & +0.035 & [+0.006, +0.058] & 0.99 \\
+Leaf hybrid - XGBoost & +0.030 & [+0.009, +0.048] & 1.00 \\
+Blend - XGBoost & +0.017 & [+0.006, +0.025] & 1.00 \\
+Temporal - Embedding MLP & +0.006 & [-0.010, +0.021] & 0.76 \\
+Leaf hybrid - Temporal & -0.005 & [-0.017, +0.011] & 0.26 \\
+\bottomrule
+\end{tabular}

@@ -1,0 +1,12 @@
+\begin{tabular}{llcccc}
+\toprule
+Model & Probabilities & Threshold & Flagged & Precision & Recall \\
+\midrule
+LR & calibrated (Oct--Nov) & 0.519 & 456 & 0.612 & 0.031 \\
+LR & rolling Platt & 0.648 & 230 & 0.557 & 0.014 \\
+XGBoost & calibrated (Oct--Nov) & 0.498 & 475 & 0.661 & 0.035 \\
+XGBoost & rolling Platt & 0.576 & 960 & 0.585 & 0.062 \\
+Temporal (MLP+GRU) & calibrated (Oct--Nov) & 0.459 & 622 & 0.728 & 0.050 \\
+Temporal (MLP+GRU) & rolling Platt & 0.527 & 1,935 & 0.581 & 0.124 \\
+\bottomrule
+\end{tabular}

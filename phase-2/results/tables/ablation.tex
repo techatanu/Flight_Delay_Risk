@@ -1,0 +1,18 @@
+\begin{tabular}{lccc}
+\toprule
+Variant & Params & Val PR-AUC & Test PR-AUC \\
+\midrule
+Selected temporal model & 9,125 & 0.294 $\pm$ 0.004 & 0.499 $\pm$ 0.010 \\
+\midrule
+No GRU (embedding MLP) & 6,757 & 0.291 $\pm$ 0.002 & 0.497 $\pm$ 0.001 \\
+GRU reads 7 days & 9,125 & 0.294 $\pm$ 0.003 & 0.508 $\pm$ 0.005 \\
+GRU reads 28 days & 9,125 & 0.293 $\pm$ 0.004 & 0.498 $\pm$ 0.009 \\
+One-hot instead of embeddings & 14,593 & 0.295 $\pm$ 0.003 & 0.505 $\pm$ 0.009 \\
+No carrier/origin/dest input & 6,593 & 0.293 $\pm$ 0.006 & 0.510 $\pm$ 0.009 \\
+No Phase 1 history features & 8,165 & 0.286 $\pm$ 0.003 & 0.484 $\pm$ 0.012 \\
+No history features, no GRU & 5,797 & 0.305 $\pm$ 0.002 & 0.437 $\pm$ 0.003 \\
+No dropout & 9,125 & 0.294 $\pm$ 0.002 & 0.501 $\pm$ 0.006 \\
+No weight decay & 9,125 & 0.294 $\pm$ 0.004 & 0.499 $\pm$ 0.009 \\
+No early stopping (40 epochs) & 9,125 & 0.267 $\pm$ 0.012 & 0.484 $\pm$ 0.012 \\
+\bottomrule
+\end{tabular}
